@@ -90,3 +90,24 @@ describe('github', () => {
     });
   });
 });
+
+// Metadata remains available to the schema task while string-list callers retain their contract.
+describe('PR change metadata filtering', () => {
+  it('retains a rename crossing the catalog boundary and its previous filename', async () => {
+    const { getChangedFileDetailsInCatalogDirectory } = await import('../../src/lib/github');
+    const renamed = {
+      filename: 'archive/events/E/schema.json',
+      previous_filename: 'docs/catalog/events/E/schema.json',
+      status: 'renamed',
+    };
+    mockListFiles.mockResolvedValue({ data: [renamed, { filename: 'README.md', status: 'modified' }] } as any);
+    expect(await getChangedFileDetailsInCatalogDirectory(mockOctokit, mockContext, 'docs/catalog')).toEqual([renamed]);
+    expect(await getChangedFilesInCatalogDirectory(mockOctokit, mockContext, 'docs/catalog')).toEqual([renamed.filename]);
+  });
+  it('retains supported status for additions in a nested catalog', async () => {
+    const { getChangedFileDetailsInCatalogDirectory } = await import('../../src/lib/github');
+    const added = { filename: 'docs/catalog/events/E/schema.json', status: 'added' };
+    mockListFiles.mockResolvedValue({ data: [added] } as any);
+    expect(await getChangedFileDetailsInCatalogDirectory(mockOctokit, mockContext, 'docs/catalog')).toEqual([added]);
+  });
+});

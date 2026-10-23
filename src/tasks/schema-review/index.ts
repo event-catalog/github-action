@@ -1,13 +1,21 @@
 import * as core from '@actions/core';
 import type { GitHub } from '@actions/github/lib/utils';
-import utils, { Message } from '@eventcatalog/sdk';
+import utils from '@eventcatalog/sdk';
 import path from 'path';
 
-import { getChangedFilesInCatalogDirectory, ReviewedFile, upsertComment } from '@/lib/github';
+import {
+  getChangedFileDetailsInCatalogDirectory,
+  getSchemaSourcePaths,
+  SchemaSourceError,
+  ReviewedFile,
+  upsertComment,
+} from '@/lib/github';
 import { Context } from '@actions/github/lib/context';
 import { getSchemasFromFilePaths } from '@/lib/eventcatalog';
 import { reviewSchema } from './review';
 import { generateGitHubCommentForSchemaReview } from './github-comment';
+import { responseSchema } from './prompt';
+import { DEFAULT_OPENAI_MODEL } from '@/ai-models/openai';
 
 const COMMENT_MARKER = '<!-- eventcatalog-schema-review-comment -->';
 
@@ -25,9 +33,8 @@ export const task = async ({ octokit, context, catalogDirectory }: TaskParams) =
   const owner = context.repo.owner;
   const repo = context.repo.repo;
   const pullRequestNumber = context.payload.pull_request!.number;
-  const model = core.getInput('model');
-  const provider = core.getInput('provider');
-  const catalogFolderName = core.getInput('catalog_directory');
+  const model = core.getInput('model') || DEFAULT_OPENAI_MODEL;
+  const provider = core.getInput('provider') || 'openai';
 
   const { getMessageBySchemaPath, getProducersAndConsumersForMessage } = utils(CATALOG_PATH);
 
@@ -38,8 +45,10 @@ export const task = async ({ octokit, context, catalogDirectory }: TaskParams) =
     return;
   }
 
-  const changedEventCatalogFilesInPullRequest = await getChangedFilesInCatalogDirectory(octokit, context, catalogDirectory);
-  const changedSchemasInPullRequest = getSchemasFromFilePaths(changedEventCatalogFilesInPullRequest);
+  const changedEventCatalogFilesInPullRequest = await getChangedFileDetailsInCatalogDirectory(octokit, context, catalogDirectory);
+  const changedSchemasInPullRequest = changedEventCatalogFilesInPullRequest.filter(
+    (file) => getSchemasFromFilePaths([file.filename, file.previous_filename || '']).length > 0
+  );
 
   if (changedSchemasInPullRequest.length === 0) {
     core.info('No schemas have changed, skipping schema review');
@@ -49,27 +58,63 @@ export const task = async ({ octokit, context, catalogDirectory }: TaskParams) =
   const reviewedFiles: ReviewedFile[] = [];
 
   // Review all the schemas, the new schema vs the old one
-  for (const filePath of changedSchemasInPullRequest) {
+  for (const change of changedSchemasInPullRequest) {
+    const filePath = change.filename;
     try {
+      getSchemaSourcePaths(change);
+      const relativePath = path.relative(catalogDirectory || '.', filePath);
+      if (
+        relativePath === '..' ||
+        relativePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePath) ||
+        getSchemasFromFilePaths([filePath]).length === 0
+      ) {
+        throw new SchemaSourceError(
+          'Schema moved outside the selected catalog or schema formats; review this change manually.',
+          'unsupported_change'
+        );
+      }
       core.info(`Reviewing schema: ${filePath}`);
-      const message = await getMessageBySchemaPath(filePath);
+      const message = await getMessageBySchemaPath(relativePath);
       const { consumers = [] } = await getProducersAndConsumersForMessage(message.id, message.version);
       core.info(`Message consumers: ${consumers.map((c) => `${c.name} (${c.version})`).join(', ')}`);
-      const schemaReviewResponse = await reviewSchema(octokit, context, filePath, consumers);
+      const schemaReviewResponse = await reviewSchema(octokit, context, filePath, consumers, change);
       reviewedFiles.push(schemaReviewResponse);
     } catch (error) {
       core.error(`Error reviewing schema: ${filePath}`);
-      core.error(error instanceof Error ? error.message : String(error));
-      core.setFailed(`Error reviewing schema: ${filePath}`);
-      return;
+      reviewedFiles.push({
+        filePath,
+        aiError:
+          error instanceof SchemaSourceError
+            ? error.message
+            : 'Schema review could not be completed. Check the schema mapping in EventCatalog.',
+        ...(error instanceof SchemaSourceError && { sourceError: error }),
+      });
     }
   }
 
-  // Get the lowest score for any of the reviewed files, compare to the failure threshold
-  const lowestScore = reviewedFiles.reduce((min, file) => Math.min(min, file.aiReview?.score || 100), 100);
+  // Fail closed on incomplete reviews. A successful sibling cannot supply a
+  // score for a failed file, and zero is a valid score.
+  for (const file of reviewedFiles) {
+    if (!file.aiError && !responseSchema.safeParse(file.aiReview).success) {
+      file.aiError = 'No valid AI review was returned.';
+    }
+  }
+  const failedReviews = reviewedFiles.filter((file) => file.aiError);
+  const successfulReviews = reviewedFiles.filter((file) => !file.aiError && file.aiReview);
+  const lowestScore = Math.min(...successfulReviews.map((file) => file.aiReview!.score));
 
-  // Order reviewed files by score (lowest to highest)
-  const orderedReviewedFiles = reviewedFiles.sort((a, b) => (a.aiReview?.score || 100) - (b.aiReview?.score || 100));
+  // Set the outcome before publishing so a comment failure cannot hide an AI failure.
+  if (failedReviews.length > 0) {
+    core.setFailed(`${failedReviews.length} schema review(s) could not be completed. See the review comment for details.`);
+  } else if (lowestScore < failureThreshold) {
+    core.setFailed(`Schema review failed with a score of ${lowestScore}`);
+  }
+
+  const orderedReviewedFiles = [...reviewedFiles].sort((a, b) => {
+    if (Boolean(a.aiError) !== Boolean(b.aiError)) return a.aiError ? -1 : 1;
+    return (a.aiReview?.score ?? Infinity) - (b.aiReview?.score ?? Infinity);
+  });
 
   const commentBody = await generateGitHubCommentForSchemaReview({
     context,
@@ -85,9 +130,4 @@ export const task = async ({ octokit, context, catalogDirectory }: TaskParams) =
     'comment-url',
     `https://github.com/${owner}/${repo}/pull/${pullRequestNumber}#issuecomment-${newOrUpdatedCommentId}`
   );
-
-  if (lowestScore < failureThreshold) {
-    core.setFailed(`Schema review failed with a score of ${lowestScore}`);
-    return;
-  }
 };

@@ -2,47 +2,63 @@ import { z, ZodSchema } from 'zod';
 import { getInput } from '@actions/core';
 import { getProvider } from '@/ai-models';
 import * as core from '@actions/core';
+import { APICallError, NoObjectGeneratedError, RetryError } from 'ai';
+import { DEFAULT_OPENAI_MODEL } from '@/ai-models/openai';
 
 export async function sendPromptToModel(
   systemPrompt: string,
   promptText: string,
   schema: ZodSchema
 ): Promise<z.infer<typeof schema>> {
-  try {
-    const provider = getInput('provider') || 'openai';
-    const model = getInput('model') || 'o4-mini';
-    const apiKey = getInput('api_key') || process.env.API_KEY || '';
+  const provider = getInput('provider') || 'openai';
+  const model = getInput('model') || DEFAULT_OPENAI_MODEL;
+  const apiKey = getInput('api_key') || process.env.API_KEY || '';
 
-    core.info(`Sending prompt to model ${model} with provider ${provider}`);
+  if (apiKey) core.setSecret(apiKey);
 
-    const { generateObject, validateModel } = getProvider(provider, {
-      modelId: model,
-      apiKey: apiKey,
-    });
+  core.info(`Sending prompt to model ${model} with provider ${provider}`);
 
-    // const { isValidModel, listOfModels } = await validateModel(model);
+  const { generateObject } = getProvider(provider, {
+    modelId: model,
+    apiKey: apiKey,
+  });
 
-    // if (!isValidModel) {
-    //   throw new Error(`Model ${model} is not supported. Supported models: ${listOfModels.join(', ')}`);
-    // }
+  // Let the original error reach the task boundary without dumping SDK request data.
+  const { object } = await generateObject(
+    [
+      {
+        role: 'system',
+        content: systemPrompt,
+      },
+      {
+        role: 'user',
+        content: promptText,
+      },
+    ],
+    schema
+  );
+  return object;
+}
 
-    const { object } = await generateObject(
-      [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: promptText,
-        },
-      ],
-      schema
-    );
-    return object;
-  } catch (error) {
-    console.error('Error calling AI model or processing structured output:', error);
-    // It's good practice to throw a more specific error or handle it appropriately
-    throw new Error('Failed to get a valid structured response from the AI model.');
+/** Avoid logging SDK error objects or provider messages, which can contain payloads and keys. */
+export function getAIErrorMessage(error: unknown): string {
+  if (RetryError.isInstance(error)) return getAIErrorMessage(error.lastError);
+  if (NoObjectGeneratedError.isInstance(error) || error instanceof z.ZodError) {
+    return 'AI review returned invalid or missing structured output.';
   }
+  if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+    return 'AI provider request timed out or was aborted.';
+  }
+  if (APICallError.isInstance(error)) {
+    const status = error.statusCode ? `HTTP ${error.statusCode}` : 'network error';
+    const data = error.data as { error?: { param?: unknown } } | undefined;
+    const param = data?.error?.param;
+    const safeParam =
+      typeof param === 'string' && ['temperature', 'reasoning_effort', 'response_format', 'model'].includes(param)
+        ? `; parameter: ${param}`
+        : '';
+    return `AI provider request failed (${status}${safeParam}).`;
+  }
+  if (error instanceof TypeError) return 'AI provider network request failed.';
+  return 'AI review failed. Check the provider configuration and try again.';
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as core from '@actions/core';
 import { task } from '../../../src/tasks/schema-review';
 import path from 'path';
@@ -9,7 +9,11 @@ const createMockOctokit = (listFilesData: any[] = []) => {
   return {
     rest: {
       pulls: {
-        listFiles: vi.fn().mockResolvedValue({ data: listFilesData }),
+        listFiles: vi.fn().mockResolvedValue({ data: listFilesData.map((file) => ({ status: 'modified', ...file })) }),
+      },
+      issues: {
+        listComments: vi.fn().mockResolvedValue({ data: [] }),
+        createComment: vi.fn().mockResolvedValue({ data: { id: 123 } }),
       },
     },
   } as any; // Cast to any to simplify mocking for tests not needing full Octokit
@@ -34,7 +38,9 @@ const createMockContext = () => {
 };
 
 describe('schema-review', () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
+    vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     // override process.cwd() to return the tests directory, this would be the github workspace directory
     vi.spyOn(process, 'cwd').mockReturnValue(path.join(__dirname, '../../../'));
   });

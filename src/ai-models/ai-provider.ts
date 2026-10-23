@@ -7,6 +7,7 @@ export interface AIProviderOptions {
   model?: LanguageModel;
   apiKey: string;
   temperature?: number;
+  objectTemperature?: number;
   topP?: number | undefined;
   topK?: number | undefined;
   frequencyPenalty?: number | undefined;
@@ -17,15 +18,26 @@ export class AIProvider {
   private model?: LanguageModel;
   private modelId: string;
   private temperature: number;
+  private objectTemperature: number | undefined;
   private topP: number | undefined;
   private topK: number | undefined;
   private frequencyPenalty: number | undefined;
   private presencePenalty: number | undefined;
   public models: string[];
 
-  constructor({ modelId, model, temperature, topP, topK, frequencyPenalty, presencePenalty }: AIProviderOptions) {
+  constructor({
+    modelId,
+    model,
+    temperature,
+    objectTemperature,
+    topP,
+    topK,
+    frequencyPenalty,
+    presencePenalty,
+  }: AIProviderOptions) {
     this.modelId = modelId;
     this.temperature = temperature ?? 0.2;
+    this.objectTemperature = objectTemperature;
     this.topP = topP;
     this.topK = topK;
     this.frequencyPenalty = frequencyPenalty;
@@ -67,6 +79,7 @@ export class AIProvider {
       model: this.model,
       messages: messages,
       schema: schema,
+      ...(this.objectTemperature !== undefined && { temperature: this.objectTemperature }),
     });
   };
 }

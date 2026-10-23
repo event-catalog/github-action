@@ -17,9 +17,9 @@ inputs:
     description: 'The API key for the model'
     required: false
   model:
-    description: 'The model to use for AI processing. Default is o4-mini.'
+    description: 'The model to use for AI processing. Default is gpt-5.6-terra.'
     required: false
-    default: 'o4-mini'
+    default: 'gpt-5.6-terra'
   provider:
     description: 'The AI Provider to use for AI processing. Default is openai.'
     required: false
@@ -38,4 +38,4 @@ runs:
 
 branding:
   icon: 'archive' # Choose an icon from https://feathericons.com/
-  color: 'blue'   # Choose a color 
+  color: 'blue' # Choose a color

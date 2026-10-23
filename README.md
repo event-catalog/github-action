@@ -38,21 +38,24 @@ jobs:
           # The AI LLM provider to use (openai, anthropic, google)
           provider: openai
 
-          # The model to use for the task, defaults to o4-mini
+          # The model to use for the task, defaults to gpt-5.6-terra
           # Find the models in the documentation below
-          model: o4-mini
+          model: gpt-5.6-terra
 
           # Your API KEY for the LLM provider
           api_key: ${{ secrets.OPENAI_API_KEY }}
-          
+
           # Your EventCatalog Scale License key
           license_key: ${{ secrets.EVENT_CATALOG_LICENSE_KEY }}
-
 ```
 
 This will perform schema reviews on every pull request. If any schema in your EventCatalog has changed for your events, queries or commands the action will comment on the pull request with a summary of the changes and a score of how likely the change is to cause issues.
 
-You can configure the action, choose provides (OpenAI, Anthropic, Google), models (o4-mini, claude-3-5-sonnet-20240620, gemini-2.0-flash-001), and more.
+You can configure the action, choose provides (OpenAI, Anthropic, Google), models (gpt-5.6-terra, claude-3-5-sonnet-20240620, gemini-2.0-flash-001), and more.
+
+The OpenAI default is `gpt-5.6-terra`, the [documented substitute](https://developers.openai.com/api/docs/deprecations) for `o4-mini`'s announced October 23, 2026 retirement. If you copied an older workflow, update its explicit `model: o4-mini` input to `model: gpt-5.6-terra`; changing the action default does not override your workflow. Set a matching model explicitly when choosing Anthropic or Google.
+
+A failed or invalid AI review is shown as **Review failed** and fails the action, even when other schemas were reviewed successfully. It has no risk score. Valid scores, including zero, fail only when below `failure_threshold`.
 
 ## Documentation
 

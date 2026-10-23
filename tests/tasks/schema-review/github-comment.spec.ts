@@ -32,11 +32,13 @@ describe('generateGitHubCommentForSchemaReview', () => {
             {
               name: 'Consumer 1',
               version: '1.0.0',
+              url: 'https://example.invalid/consumer',
               warning: 'Warning 1',
             },
             {
               name: 'Consumer 2',
               version: '1.0.1',
+              url: 'https://example.invalid/consumer',
               warning: 'Warning 2',
             },
           ],

@@ -30,15 +30,25 @@ Format your response as a JSON object with the following keys:
 - "effectedConsumers": A list of consumers that MAY be affected by the changes with a warning message to the team about the consumer (service). And how this can effect them.
 - "score": A numerical score from 0 to 100, where 0 indicates a very problematic change with high risk of breaking compatibility, and 100 indicates a perfectly safe and well-designed change.`;
 
-export const getUserPromptForSchemaReview = (previousSchema: string, newSchema: string, consumers: Message[]) => `
+export const getUserPromptForSchemaReview = (
+  previousSchema: string | null,
+  newSchema: string,
+  consumers: Message[],
+  changeStatus = 'modified'
+) => `
 
 Please analyze these changes for potential issues, especially breaking changes if this is a schema or configuration file. Provide your assessment.
 
 Review the following changes to the schema:
-Previous schema:
+Change type: ${changeStatus}.
+${
+  previousSchema === null
+    ? 'Base schema: absent, verified by GitHub added-file metadata.'
+    : `Previous schema:
 \`\`\`
 ${previousSchema}
-\`\`\`
+\`\`\``
+}
 New schema:
 \`\`\`
 ${newSchema}

@@ -1,7 +1,11 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { AIProvider, type AIProviderOptions } from '@/ai-models/ai-provider';
 
+export const DEFAULT_OPENAI_MODEL = 'gpt-5.6-terra';
+
 const AVAILABLE_OPENAI_MODELS = [
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
   'o1',
   'o1-2024-12-17',
   'o1-mini',
@@ -55,9 +59,15 @@ export class OpenAIProvider extends AIProvider {
     const openaiProvider = createOpenAI({
       apiKey: options.apiKey,
     });
-    const languageModel = openaiProvider(options.modelId || 'o4-mini');
+    const modelId = options.modelId || DEFAULT_OPENAI_MODEL;
+    // The locked SDK treats these newer models as classic chat models, choosing
+    // function tools and temperature 0. Use its native JSON-schema output and
+    // the supported temperature for these explicitly qualified substitutes.
+    const isQualifiedSubstitute = modelId === 'gpt-5.6-terra' || modelId === 'gpt-5.6-luna';
+    const languageModel = openaiProvider(modelId, isQualifiedSubstitute ? { structuredOutputs: true } : {});
     super({
       ...options,
+      ...(isQualifiedSubstitute && { objectTemperature: 1 }),
       model: languageModel,
     });
     this.models = [...AVAILABLE_OPENAI_MODELS];

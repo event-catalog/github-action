@@ -1,0 +1,165 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`locked SDK compatibility (no provider requests) > uses strict schema output and supported temperature for explicit gpt-5.6-luna 1`] = `
+{
+  "body": {
+    "messages": [
+      {
+        "content": "Review the synthetic schema change.",
+        "role": "user",
+      },
+    ],
+    "model": "gpt-5.6-luna",
+    "response_format": {
+      "json_schema": {
+        "name": "response",
+        "schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "effectedConsumers": {
+              "description": "A list of consumers that MAY be affected by the changes to the schemas.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "description": "The name of the consumer (service).",
+                    "type": "string",
+                  },
+                  "url": {
+                    "description": "The URL of the consumer (service).",
+                    "type": "string",
+                  },
+                  "version": {
+                    "description": "The version of the consumer.",
+                    "type": "string",
+                  },
+                  "warning": {
+                    "description": "A warning message to the user about the consumer (service).",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "name",
+                  "version",
+                  "url",
+                  "warning",
+                ],
+                "type": "object",
+              },
+              "type": "array",
+            },
+            "executiveSummary": {
+              "description": "A concise summary of key findings and overall impact, suitable for quick review by enterprise stakeholders.",
+              "type": "string",
+            },
+            "schemaFormat": {
+              "description": "The type of schema For example "avro", "json", "yaml", "proto", "thrift", "xml", "avsc". For example JSONDraft7, Avro, Protobuf, etc.",
+              "type": "string",
+            },
+            "score": {
+              "description": "A score from 0 to 100, where 0 indicates a very problematic change and 100 indicates a perfectly safe change.",
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number",
+            },
+          },
+          "required": [
+            "executiveSummary",
+            "score",
+            "schemaFormat",
+            "effectedConsumers",
+          ],
+          "type": "object",
+        },
+        "strict": true,
+      },
+      "type": "json_schema",
+    },
+    "temperature": 1,
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+}
+`;
+
+exports[`locked SDK compatibility (no provider requests) > uses strict schema output and supported temperature for explicit gpt-5.6-terra 1`] = `
+{
+  "body": {
+    "messages": [
+      {
+        "content": "Review the synthetic schema change.",
+        "role": "user",
+      },
+    ],
+    "model": "gpt-5.6-terra",
+    "response_format": {
+      "json_schema": {
+        "name": "response",
+        "schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "effectedConsumers": {
+              "description": "A list of consumers that MAY be affected by the changes to the schemas.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "description": "The name of the consumer (service).",
+                    "type": "string",
+                  },
+                  "url": {
+                    "description": "The URL of the consumer (service).",
+                    "type": "string",
+                  },
+                  "version": {
+                    "description": "The version of the consumer.",
+                    "type": "string",
+                  },
+                  "warning": {
+                    "description": "A warning message to the user about the consumer (service).",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "name",
+                  "version",
+                  "url",
+                  "warning",
+                ],
+                "type": "object",
+              },
+              "type": "array",
+            },
+            "executiveSummary": {
+              "description": "A concise summary of key findings and overall impact, suitable for quick review by enterprise stakeholders.",
+              "type": "string",
+            },
+            "schemaFormat": {
+              "description": "The type of schema For example "avro", "json", "yaml", "proto", "thrift", "xml", "avsc". For example JSONDraft7, Avro, Protobuf, etc.",
+              "type": "string",
+            },
+            "score": {
+              "description": "A score from 0 to 100, where 0 indicates a very problematic change and 100 indicates a perfectly safe change.",
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number",
+            },
+          },
+          "required": [
+            "executiveSummary",
+            "score",
+            "schemaFormat",
+            "effectedConsumers",
+          ],
+          "type": "object",
+        },
+        "strict": true,
+      },
+      "type": "json_schema",
+    },
+    "temperature": 1,
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+}
+`;

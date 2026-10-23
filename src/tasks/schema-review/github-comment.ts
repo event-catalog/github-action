@@ -3,6 +3,7 @@ import mustache from 'mustache';
 import { Context } from '@actions/github/lib/context';
 import utils from '@eventcatalog/sdk';
 import { getInput } from '@actions/core';
+import { responseSchema } from './prompt';
 
 const COMMENT_MARKER = '<!-- eventcatalog-schema-review-comment -->';
 
@@ -14,6 +15,12 @@ The following schemas were modified in this pull request:
 
 ## [{{{name}}} ({{{version}}}) ({{{scorePrefix}}})]({{{fileDiffLink}}})
 
+{{#reviewFailed}}
+**Review failed:** {{aiError}}
+
+No risk score is available for this schema. Resolve the failure and rerun the action.
+{{/reviewFailed}}
+{{^reviewFailed}}
 | Schema Format | Risk Score |
 |---------------|------------|
 | {{{aiReview.schemaFormat}}} | {{{aiReview.score}}}/100 |
@@ -32,6 +39,7 @@ The following schemas were modified in this pull request:
 
 {{name}} ({{version}}) has no consumers mapped in EventCatalog.
 {{/hasEffectedConsumers}}
+{{/reviewFailed}}
 {{/reviewedFiles}}
 
 <sub>Using Model: {{model}} | Provider: {{provider}}</sub>
@@ -66,21 +74,29 @@ export const generateGitHubCommentForSchemaReview = async ({
   const messages = await Promise.all(
     reviewedFiles.map(async (file) => {
       const relativeFilePath = file.filePath.replace(catalogFolderName, '');
-      const message = await getMessageBySchemaPath(relativeFilePath);
+      const message =
+        file.sourceError?.category === 'unsupported_change'
+          ? undefined
+          : await getMessageBySchemaPath(relativeFilePath).catch(() => undefined);
       return {
         ...file,
-        name: message.name,
-        version: message.version,
+        name: message?.name || file.filePath,
+        version: message?.version || 'unknown',
       };
     })
   );
 
-  const data = messages.map((file) => ({
-    ...file,
-    scorePrefix: getScorePrefix(file.aiReview?.score || 100),
-    fileDiffLink: `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${context.payload.pull_request?.number}/files#${encodeURIComponent(file.filePath)}`,
-    hasEffectedConsumers: (file.aiReview?.effectedConsumers?.length || 0) > 0,
-  }));
+  const data = messages.map((file) => {
+    const reviewFailed = Boolean(file.aiError) || !responseSchema.safeParse(file.aiReview).success;
+    return {
+      ...file,
+      reviewFailed,
+      aiError: file.aiError || 'No valid AI review was returned.',
+      scorePrefix: reviewFailed ? '❌ Review failed' : getScorePrefix(file.aiReview!.score),
+      fileDiffLink: `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${context.payload.pull_request?.number}/files#${encodeURIComponent(file.filePath)}`,
+      hasEffectedConsumers: (file.aiReview?.effectedConsumers?.length || 0) > 0,
+    };
+  });
 
   const commentBody = mustache.render(TEMPLATE, {
     reviewedFiles: data,
